@@ -1,142 +1,176 @@
-from typing import Callable, Mapping
-from lexer import Token, SpaceToken, WordToken
+from typing import Callable, Mapping, cast
+
+from parsy import Parser, Result, seq, test_item
+import regex
+
+from lexer import Character
 from model import *
 
+
+# The keys should be in \uXXXX form for readability.
 LINGUA_TO_UNICODE: Mapping[str, str] = {
     '\u041a': 'ə̑',
 }
 
-def convert_lingua(symbol: str) -> str:
-    if symbol in LINGUA_TO_UNICODE:
-        return LINGUA_TO_UNICODE[symbol]
-    else:
-        code = ord(symbol)
+
+def normalize_char(c: Character) -> str:
+    """Convert a character to its normal form.
+
+    When the character is typeset with the Lingua font, it is normalized to the
+    corresponding standard Unicode representation.
+
+    When the character is a whitespace, it is normalized to one regular space.
+
+    In other cases, the character is returned as-is.
+    """
+    if c.format.font == 'Lingua':
+        if c.char in LINGUA_TO_UNICODE:
+            return LINGUA_TO_UNICODE[c.char]
+
+        code = ord(c.char)
         raise Exception(f'No Unicode symbol matching for {code:x}.')
+    if c.char.isspace():
+        return ' '
+    return c.char
 
-class Parser:
-    toks: list[Token]
 
-    def __init__(self, toks: list[Token]):
-        self.toks = toks
+def plain_text(chars: list[Character]) -> str:
+    """Collect a list of characters into a plain text string.
 
-    def check_end_of_tokens(self, pos: int) -> bool:
-        if pos >= len(self.toks):
-            raise Error("eof")
-        return True
+    This function effectively strips any formatting.
+    """
+    return ''.join(map(normalize_char, chars))
 
-    def skip_spaces(self, pos: int):
-        while pos < len(self.toks) and isinstance(self.toks[pos], SpaceToken):
-            pos += 1
-        return pos
 
-    def until_breaker(self, pos: int) -> tuple[str, int]:
-        parts = []
-        while pos < len(self.toks) and not (self.toks[pos].text in {';', '○'}):
-            parts.append(self.toks[pos].text)
-            pos += 1
-        if parts:
-            return ''.join(parts).strip(), pos
+def formatted_text(chars: list[Character]) -> list[MarkupNode]:
+    """Transform a list of characters to a list of HTML-like markup nodes.
+
+    Currently, only superscripts are accounted.
+    """
+    sup = False
+    i, j = 0, 0
+    nodes: list[MarkupNode] = []
+
+    def push_node():
+        nonlocal i, j, nodes
+        text = plain_text(chars[i:j])
+        node = TextNode(text)
+        if sup:
+            node = Superscript([node])
+        nodes.append(node)
+        i = j
+
+    while j < len(chars):
+        char = chars[j]
+        if char.format.sup != sup:
+            push_node()
+            sup = char.format.sup
+        j += 1
+
+    if j > i:
+        push_node()
+
+    return nodes
+
+
+def format_pred(**kwargs) -> Callable[[Character], bool]:
+    """Return a predicate matching a character with specific formatting.
+
+    The formatting is checked in accordance with the following keyword
+    arguments:
+    - `bold` -- if `True`, the character should be in bold, otherwise in normal
+      weight.
+    - `italic` -- if `True`, the character should be in italics, otherwise
+      upright.
+
+    If any of the mentioned keyword arguments is not present, the corresponding
+    feature is ignored.  The formatting style of whitespace is always ignored
+    and the predicate in that case always returns `True`.
+    """
+    preds = []
+
+    if 'bold' in kwargs:
+        if kwargs['bold']:
+            preds.append(lambda c: c.format.bold)
         else:
-            return None, pos
+            preds.append(lambda c: not c.format.bold)
 
-    def parse_while_word(self, pos: int, f: Callable[[WordToken], bool]):
-        buffer = []
-        while pos < len(self.toks):
-            if isinstance(self.toks[pos], SpaceToken):
-                buffer.append(self.toks[pos].text)
-                pos += 1
-            elif f(self.toks[pos]):
-                buffer.append(self.toks[pos].text)
-                pos += 1
-            else:
+    if 'italic' in kwargs:
+        if kwargs['italic']:
+            preds.append(lambda c: c.format.italic)
+        else:
+            preds.append(lambda c: not c.format.italic)
+
+    return lambda c: c.char.isspace() or all(f(c) for f in preds)
+
+
+def chars(pattern: str | regex.Pattern = ".+", **kwargs):
+    """Return a parser expecting the given `pattern` matching the formatting.
+
+    The parser returns a list of matched characters as a successful result.
+
+    `pattern` can be a regular expression compiled with the `regex` library (the
+    standard `re` will not work) or a string representing the said regular
+    expression.
+
+    Additional keyword arguments may be passed to specify expected formatting.
+    They are interpreted by `format_pred`, which see.
+    """
+    pred = format_pred(**kwargs)
+    if isinstance(pattern, str):
+        pattern = regex.compile(pattern)
+    elif not isinstance(pattern, regex.Pattern):
+        raise Exception('pattern should be a string or a regex.Pattern')
+
+    @Parser
+    def consumer(stream: list[Character], index: int) -> Result:
+        chars = []
+        last_good_match: regex.Match | None = None
+
+        for char in stream[index:]:
+            if not pred(char):
                 break
+            chars.append(char)
+            text = ''.join(c.char for c in chars)
+            match = pattern.fullmatch(text, partial=True)
+            if match is None:
+                break
+            if not match.partial:
+                last_good_match = match
 
-        if buffer:
-            return ''.join(buffer).strip(), pos
+        if last_good_match:
+            n = last_good_match.end()
+            return Result.success(index + n, chars[:n])
         else:
-            return None, pos
+            return Result.failure(index, pattern.pattern)
 
-    def parse_italicized(self, pos: int):
-        return self.parse_while_word(pos, lambda t: t.italic)
+    return consumer
 
-    def parse_bold(self, pos: int):
-        return self.parse_while_word(pos, lambda t: t.bold)
 
-    def parse_headword(self, pos: int):
-        self.check_end_of_tokens(pos)
-        return self.parse_bold(pos)
+def match_char(char: str) -> Parser:
+    """Return a parser that matches a single character regardless of formatting"""
+    return test_item(lambda c: c.char == char, char)
 
-    def parse_pronunciation(self, pos):
-        self.check_end_of_tokens(pos)
-        if self.toks[pos].text == '(':
-            pos += 1
-            sup = None
-            buffer = []
-            nodes = []
 
-            def push_node():
-                nonlocal buffer, nodes
-                text = ''.join(buffer)
-                node = TextNode(text)
-                if sup:
-                    node = Superscript([node])
-                nodes.append(node)
-                buffer = []
+pronunciation = (
+    match_char('(') >>                     \
+      chars(r"[^\)]+").map(formatted_text) \
+      << match_char(')')
+).map(Span)
 
-            while pos < len(self.toks) and not (self.toks[pos].text == ')'):
-                if isinstance(self.toks[pos], SpaceToken):
-                    buffer.append(self.toks[pos].text)
-                elif isinstance(self.toks[pos], WordToken):
-                    # TODO: superscripts
-                    for ch in self.toks[pos].chars:
-                        if ch.format.sup != sup:
-                            push_node()
-                            sup = ch.format.sup
-                        buffer.append(
-                            ch.format.font == "Lingua" and convert_lingua(ch.char)
-                            or ch.char
-                        )
-                pos += 1
-            if pos >= len(self.toks) or self.toks[pos].text != ')':
-                raise Error("unclosed parenthesis")
-            pos += 1
-            if buffer:
-                push_node()
-            return Span(nodes), pos
-        return None, pos
+example = match_char('○') >> \
+    seq(
+        text=chars(italic=True).map(plain_text).map(str.strip),
+        description=chars(r"[^;]+").map(plain_text).map(str.strip),
+    ).combine_dict(Example)
 
-    def parse_sense(self, pos: int):
-        translation, pos = self.until_breaker(pos)
-        example, pos = self.parse_example(pos, marker='○')
-        return Sense(
-            translation=translation,
-            examples=[example]
-        ), pos
+sense = seq(
+    translation=chars(r"[^;○]+").map(plain_text).map(str.strip),
+    examples=example.many(),
+).combine_dict(Sense)
 
-    def parse_example(self, pos: int, marker: str = None):
-        if not marker:
-            pass
-        elif self.check_end_of_tokens(pos) and self.toks[pos].text == marker:
-            pos += 1
-        else:
-            raise Exception("erur")
-
-        # TODO: parse <...>
-        # What if marker was matched but nothing more?
-        source, pos = self.parse_italicized(pos)
-        if source:
-            translation, pos = self.until_breaker(pos)
-            return Example(text=source, description=translation), pos
-        else:
-            return None, pos
-
-    def parse(self) -> Entry:
-        pos = 0
-        headword, pos = self.parse_headword(pos)
-        pronunciation, pos = self.parse_pronunciation(pos)
-        sense, pos = self.parse_sense(pos)
-        return Entry(
-            headword,
-            pronunciation,
-            [sense],
-        )
+entry = seq(
+    headword=chars(r"[-а-яӵӧӝӥӟўө\s]+", bold=True).map(plain_text).map(str.strip),
+    pronunciation=pronunciation,
+    senses=sense*1,
+).combine_dict(Entry)

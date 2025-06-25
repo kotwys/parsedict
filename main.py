@@ -1,8 +1,9 @@
 from docx import Document
 from pprint import pprint
 import sys
-from lexer import tokenize
-from parser import Parser
+import time
+from lexer import extract_characters
+from parser import entry
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:
@@ -10,6 +11,9 @@ if __name__ == "__main__":
 
     doc = Document(sys.argv[1])
     par = doc.paragraphs[0]
-    toks = list(tokenize(par))
-    parser = Parser(toks)
-    pprint(parser.parse())
+    start_ns = time.perf_counter_ns()
+    toks = list(extract_characters(par))
+    result = entry.parse(toks)
+    end_ns = time.perf_counter_ns()
+    pprint(result)
+    print(f'{(end_ns - start_ns) / 1e6}ms elapsed')
