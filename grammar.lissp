@@ -1,0 +1,472 @@
+;;;; Описание грамматики словаря  -*- mode: scheme -*-
+
+;;; В этом файле описана «грамматика» для разбора структуры словарной статьи
+;;; словаря «Лексика бесермян: наследие Т. И. Тепляшиной» (Максимов С. А.,
+;;; УдмФИЦ УрО РАН, 2024).
+
+;;; Этот файл представляет собой исполняемый код Python, записанный в
+;;; Лиспо-подобном синтаксисе для удобства и исполняемый в рамках модуля
+;;; `parser` (см. функцию `parser.init_grammar`).  Этот файл может использовать
+;;; функции из библиотеки комбинаторов парсеров parsy, а также функции,
+;;; определённые в модуле `parser.helpers` (см. импорты в модуле `parser`).
+
+;;; В этом файле определена переменная `entry`, представляющая собой парсер,
+;;; используемый для разбора словарной статьи.
+
+hissp..prelude#:
+
+;;;; Вспомогательные функции
+
+;; Разобрать произвольную последовательность символов между START и END.
+;; Это может быть полезно в том случае, когда внутри ограниченной
+;; последовательности необходимо подавить функцию какого-либо другого
+;; символа-разделителя (например, точки с запятой), который будет
+;; поглощён вместе с остальным текстом.
+(defun delimited-sequence (start end)
+  (-> (.times (match_char start) 1)
+      (operator..add (chars (.format "[^\\{}]+" end)))
+      (operator..add
+       (.times (match_char end) 1))))
+
+(defun repeat1 (p)
+  (-> p (.at_least 1) (.map flatten)))
+
+(defun concat-truthy (col)
+  (reduce concat (filter bool col) (list)))
+
+;; Вернуть парсер, который успешен, если на данной позиции успешно выполняется
+;; парсер P, и который не поглощает каких-либо символов.
+(defun ahead? (p)
+  (.until any_char p : max 0))
+
+;;;; Константы
+
+(define location-names
+  '(|Б. Юнда| |Вар.| |Вас.| |ВП| |Врц.| |Горд.| |Гул.| |Дон.| |Еж.| |Еж. поч.|
+    |Жув.| |Ист.| |Итча| |Итчи| |Кам.| |М. Дасос| |М. Юнда| |Митр.| |Моч.|
+    |Омс.| |Пиб.| |Пом.| |Ряб.| |Тур.| |Турч.| |Тут.| |Тыл.| |Фил.| |Шам.|
+    |Юн.| |Ал.|
+    |В. И.| ; ??
+    ))
+
+(define region-labels
+  '(|бюн.| |вас.| |врц.| |горд.| |гул.| |еж.| |жув.| |зап.| |итч.| |лекм.|
+    |мюн.| |пиб.| |турч.| |тыл.| |фил.| |шам.| |юнд.|
+    |стар.|  ; тоже сюда
+    ))
+
+(define other-label
+  '(|анат.| |астр.| |афф.| |безл.| |бот.| |бран.| |букв.| |в знач.|
+    |ввод. сл.| |вводн.| |вет.| |вин. п.| |вм.| |воен.| |возвр.|
+    |вопрос.| |вопросит.| |вр.| |врем.| |вспом. гл.| |вход. п.|
+    |выд.-огран.| |выс.| |гл.| |глаг.| |дат. п.| |деепр.| |действ.|
+    |дет.| |детск.| |диал.| |долж.| |дроб.| |ед. ч.| |ж.| |ж.-д.| |заг.|
+    |знач.| |изобр.| |изобразит.| |изъясн.| |инф.| |ирон.| |колич.|
+    |крат.| |кул.| |л.| |-л.| |ласк.| |ласкат.| |лит.| |личн.-притяж.|
+    |м.| |мат.| |мед.| |межд.| |мест.| |миф.| |мифолог.| |мн. ч.|
+    |многокр.| |мод.| |мол.| |нареч.| |наст.| |неопр.| |неочев.|
+    |неперех.| |обл.| |обобщ.-опред.| |обряд.| |опред.| |орф.| |отриц.|
+    |пассив.| |перен.| |перех.| |повел.| |повс.| |подр.| |полит.|
+    |понуд.| |портн.| |пос.| |посл.| |превосх. ст.| |пред.| |пред. п.|
+    |презрит.| |приблиз.| |притяж.| |прич.| |прост.| |противит.| |прош.|
+    |разг.| |разд.| |разделит.| |рег.| |рел.| |религ.| |рел.-обряд.|
+    |руг.| |ругат.| |рыб.| |сказ.| |соб.| |собир.| |собир.-разд.|
+    |собств.| |совр.| |соед.| |соотв.| |соотв. п.| |союз-част.| |спец.|
+    |стар.| |стр.| |строит.| |страд.| |суфф.| |с.-х.| |твор. п.|
+    |текст.| |ткац.| |топон.| |указ.| |уменьш.-ласк.| |употр.| |усил.|
+    |усил.-личн.| |усл.-причин.| |уст.| |устар.| |утверд.| |физиол.|
+    |фольк.| |церк.| |част.| |числ.| |этн.| |языч.|
+    |сущ.| |выражения|
+    |см.|))
+
+(define headword-pattern
+  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0275\u0301\u0308\\s\\.\\?etyopahkxcbm]+"
+                  : flags regex..IGNORECASE))
+
+;;;; Парсеры
+
+(define space (.desc (chars "\\s*") "пробел"))
+
+(define generic-sep (.desc (chars ";\\s*") "разделитель точка с запятой"))
+
+(define headword-text
+  (-> (alt (chars headword-pattern : bold True)
+           (-> (seq (chars "\\(" : bold True)
+                    (-> (alt (chars headword-pattern : bold True)
+                             (chars ",\\s*" : bold True))
+                        (.at_least 1)
+                        (.map flatten))
+                    (chars "\\)" : bold True))
+               (.map flatten)))
+      (.desc "текст заголовочного слова")
+      (.at_least 1)
+      (.map flatten)
+      (.map (collect : strip True script 'Cyrl))))
+
+(define headword
+  (seq :
+       value
+       headword-text
+
+       homonym_id
+       (-> (chars "[IVXL]+" : bold True) ; Roman numerals
+           (.desc "римские цифры")
+           (.map (collect))
+           (.optional))
+
+       assumed
+       (-> (chars "\\*" : bold True)
+           (.then (success True))
+           (.optional False))))
+
+(define pronunciation
+  (-> (match_char "(")
+      (.then (-> (alt (chars "[^\\)]+" : italic True)
+                      (chars "~\\s*")
+                      (chars "’")
+                      (chars "\\."))
+                 (.at_least 1)
+                 (.map flatten)
+                 (.map (collect : markup '(sup)))))
+      (.skip (match_char ")"))
+      (.desc "произношение")))
+
+(define headword-and-pronunciation
+  (-> (seq headword
+           (seq :
+                _space        (.optional space)
+                pronunciation (.optional pronunciation)
+                _space2       (.optional space)
+
+                region
+                (-> (chars (regex_opt region-labels) :
+                           italic True)
+                    (.desc "метка региона")
+                    (.map (collect))
+                    (.sep_by (chars "\\s+")))))
+      (.combine operator..or_)))
+
+(define headword-ref
+  (-> (seq headword
+           (seq :
+                sense_number
+                (-> (chars "\\d+" : bold True)
+                    (.desc "номер значения в ссылке")
+                    (.map (collect))
+                    (.optional))
+
+                subphrase
+                (-> (chars ":\\s*" : bold True)
+                    (.then headword)
+                    (.desc "ссылка на подвыражение")
+                    (.optional))))
+      (.combine operator..or_)))
+
+(define reference
+  (seq :
+       label  (-> (chars : italic True)
+                  (.map (collect : strip True)))
+       base   (-> headword
+                  (.sep_by (chars ",\\s*|\\s*и\\s+") :
+                           min 1))
+       _sep   (.optional (chars ";\\s*"))))
+
+(define sense-number
+  (-> (chars "\\d+[\\.\\)]" : bold True)
+      (.desc "номер значения")))
+
+(define number-range
+  (-> (chars "((\\d+[-–]\\d+)|(\\d+(,\\s*\\d+)+))[\\.\\)]" : bold True)
+      (.desc "несколько номеров")))
+
+(define possible-phrase-start
+  (-> generic-sep
+      (.then (chars "." : bold True italic False))
+      (.desc "возможное начало устойчивого выражения")))
+
+(define section-end
+  (alt eof
+       number-range
+       sense-number
+       (match_char "○")
+       (match_char "♦")
+       possible-phrase-start
+       (match_char "●")))
+
+(define labels-skip
+  (-> (chars (regex_opt other-label) : italic True)
+      (.skip space)
+      (.many)))
+
+(define labels-text
+  (-> (chars (regex_opt other-label) : italic True)
+      (.sep_by (chars ",?\\s+") : min 1)
+      (.map flatten)
+      (.map (collect))))
+
+;; Также может служить началом конечных ссылок
+(define possible-example-start
+  (-> (chars ";\\s*(\\?\\s*)?\\*?(<…>[;,\\.]?\\s*)?")
+      (.then labels-skip)
+      (.then (chars "." : italic True))
+      (.desc "возможное начало примера")))
+
+(define end-reference-start
+  (chars (regex_opt '(|см. тж.| |ср.|)) : italic True))
+
+(define example-text
+  (-> (seq (.optional (chars "\\*"))
+           (repeat1
+            (-> (.should_fail labels-text "помета")
+                (.then (alt (chars "[^○\\*<]" : italic True)
+                            ;; ellipsis
+                            (chars "(,\\s*)?<(…|\\.{3})>")
+                            ;; phonetic variation
+                            (chars "~\\s*")
+                            ;; doubt
+                            (chars "\\?\\s*")
+                            (chars "\\."))))))
+      (.desc "текст примера")
+      (.map concat-truthy)
+      (.map (collect :
+                     markup '(bold sup)
+                     strip  True
+                     script 'detect))))
+
+(define translation-text
+  (-> (alt (delimited-sequence "(" ")")
+           (.times any_char 1))
+      (.until (alt section-end possible-example-start))
+      (.map flatten)
+      (.map (collect :
+                     markup '(bold italic)
+                     strip  True))))
+
+(define valid-example-ender
+  (alt section-end
+       possible-example-start))
+
+(defun description-text (ender)
+  (let (valid-end
+        (alt (-> (chars ",\\s*")
+                 (.then (chars "." : italic True)))
+             (-> (.optional space)
+                 (.then valid-example-ender))))
+    (-> any_char
+        (.until (alt (-> ender (.then (ahead? valid-end)))
+                     valid-example-ender))
+        (operator..add (alt ender (success (list))))
+        (.map (collect :
+                       markup '(italic sup)
+                       strip  ", ")))))
+
+;; [210]
+;; [259.3]
+;; [1, 2, 3]
+;; [41–23]
+(define ref-monograph
+  (-> (chars "\\[\\d+[^\\]]*\\]")
+      (.desc "ссылка на монографию")))
+
+(define example-monograph
+  (-> (.should_fail end-reference-start "начало конечной ссылки")
+      (.then
+       (seq :
+            label       (.optional labels-text)
+            text        example-text
+            description (description-text ref-monograph)
+            source      (success 'monograph)))))
+
+;; (Б. Юнда)
+;; (Шам. 2, 11)
+;; (Турч. 1, 23; Шам. 3, 10)
+(define ref-filecabinet
+  (.desc
+   (chars
+    (.format
+     "\\((?P<ref>({},?\\s*)+((?P<page>\\d+(,\\s*\\d+)?)(;\\s*(?&page))*)?)(;\\s*(?&ref))*\\)"
+     (regex_opt location-names)))
+   "ссылка на картотеку"))
+
+(define example-filecabinet
+  (-> (.should_fail end-reference-start "начало конечной ссылки")
+      (.then
+       (seq :
+            label       (.optional labels-text)
+            text        example-text
+            description (description-text ref-filecabinet)
+            source      (success 'filecabinet)))))
+
+(define examples-section
+  (let (separator (chars "[;,]\\s*"))
+    (-> (seq
+         ;; monograph examples
+         (-> (.sep_by example-monograph separator)
+             (.skip (.optional space)))
+
+         ;; file cabinet examples
+         (-> (match_char "○")
+             (.then (.optional space))
+             (.then (.sep_by example-filecabinet separator : min 1))
+             (.optional)))
+        (.map concat-truthy)
+        (.bind (lambda (v)
+                 (if-else v
+                   (success v)
+                   (fail "ожидался хотя бы один пример"))))
+        (.skip (.optional space)))))
+
+(define sense-lexical
+  (seq :
+       translation translation-text
+       type        (success 'lexical)
+       examples    (-> (.optional generic-sep)
+                       (.then examples-section)
+                       (.optional))))
+
+(define sense-reference
+  (-> reference
+      (.map (lambda (r) (% 'type 'ref :** r)))))
+
+(define phrase (forward_declaration))
+
+(define sense-phrase
+  (seq :
+       translation
+       (-> (seq (-> (chars : italic True) ; пометы
+                    (.desc "пометы перед фразой")
+                    (.optional (list)))
+                (-> (chars "[^:]+" : bold True) ; синонимы
+                    (.desc "синонимы перед фразой")
+                    (.optional (list))))
+           (.map flatten)
+           (.map (collect :
+                          strip True
+                          markup '(bold italic))))
+
+       _colon (chars ":\\s+" : bold True)
+       phrase phrase
+       type   (success 'phrase)))
+
+(define sense
+  (alt sense-reference sense-lexical))
+
+(define commentary
+  (let (valid-ender
+        (alt eof
+             (match_char "●")
+             (-> generic-sep (.then end-reference-start))))
+    (-> (match_char "●")
+        (.then (-> any_char (.until valid-ender)))
+        (.map (collect : markup '(italic) strip True)))))
+
+(defun end-reference (marker)
+  (let (pat (.format "{}\\s*" (regex..escape marker)))
+    (-> (chars pat : italic True)
+        (.then (.sep_by headword-ref (chars ",\\s*") : min 1)))))
+
+(define detached-examples
+  (seq :
+       examples
+       (-> number-range
+           (.then (chars ":\\s*"))
+           (.then examples-section))
+
+       type
+       (success 'examples)))
+
+(define entry-single-sense
+  (seq : senses (operator..mul sense 1)))
+
+(define entry-multiple-senses
+  (seq :
+       label
+       (-> (chars : italic True)
+           (.map (collect : strip True))
+           (.optional))
+
+       senses
+       (-> (alt (.then sense-number (alt sense-phrase sense))
+                detached-examples)
+           (.at_least 1))))
+
+(define entry-examples-only
+  (-> (alt (ahead? (match_char "○"))
+           (.should_fail
+            (-> labels-skip (.then (chars "." : italic False)))
+            "ожидалось начало перевода"))
+      (.then examples-section)
+      (.map
+       (lambda (examples)
+         (% 'senses (@ (% 'examples examples
+                          'type     'examples)))))))
+
+(.become
+ phrase
+ (-> (.should_fail end-reference-start "начало конечной ссылки")
+     (.then (seq
+             (-> headword-and-pronunciation
+                 (.sep_by (chars ",\\s+")))
+             (alt entry-examples-only
+                  entry-multiple-senses
+                  entry-single-sense)))
+     (.combine (lambda (a b) (% 'headword a :** b)))))
+
+(define entry-phraseological
+  (seq :
+       label
+       (-> (chars : italic True bold False)
+           (.map (collect : strip True))
+           (.optional))
+
+       _colon  (chars ":\\s*" : bold True)
+
+       senses
+       (-> phrase
+           (.map (lambda (phrase)
+                   (% 'type   'phrase
+                      'phrase phrase)))
+           (.sep_by generic-sep : min 1))))
+
+(define entry
+  (-> (seq
+       (seq : ; Общая часть
+            headword
+            (-> headword-and-pronunciation
+                (.sep_by (chars ",\\s+") : min 1))
+
+            _space (.optional space)
+
+            derivation
+            (.optional reference))
+       (alt (-> (ahead? (alt eof
+                             (match_char "♦")
+                             (match_char "●")))
+                (.then (success |{}|))) ; если это статья-ссылка, то она
+                                        ; заканчивается здесь
+            entry-phraseological
+            entry-multiple-senses
+            entry-single-sense)
+       (seq : ; Заключительная часть
+            phrases
+            (-> (match_char "♦")
+                (.then (.optional space))
+                (.then (.sep_by phrase generic-sep : min 1))
+                (.many)
+                (.map flatten))
+
+            commentary
+            (.many commentary)
+
+            doublets
+            (-> generic-sep
+                (.then (end-reference "см. тж."))
+                (.optional))
+
+            compare
+            (-> generic-sep
+                (.then (end-reference "ср."))
+                (.optional))
+
+            _period (.optional (match_char "."))))
+      (.map (lambda (ds) (reduce operator..or_ ds)))))

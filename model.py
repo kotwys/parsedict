@@ -1,5 +1,6 @@
 from abc import ABC
 from dataclasses import dataclass
+from typing import Mapping, Optional
 
 @dataclass
 class MarkupNode(ABC):
@@ -10,25 +11,30 @@ class TextNode(MarkupNode):
     content: str
 
 @dataclass
-class Span(MarkupNode):
-    children: list[MarkupNode]
-
-@dataclass
 class Superscript(MarkupNode):
     children: list[MarkupNode]
 
 @dataclass
+class Italic(MarkupNode):
+    """Italic markup.
+
+    Corresponds to the HTML element `em`."""
+    children: list[MarkupNode]
+
+@dataclass
 class Example:
-    text: str
-    description: str
+    text: list[MarkupNode]
+    description: list[MarkupNode]
 
 @dataclass
 class Sense:
-    translation: str
-    examples: list[Example]
+    label: Optional[str]
+    translation: list[MarkupNode]
+    examples: Mapping[str, list[Example]]
 
 @dataclass
 class Entry:
     headword: str
-    pronunciation: Span
+    pronunciation: Optional[list[MarkupNode]]
     senses: list[Sense]
+    commentary: Optional[list[MarkupNode]]

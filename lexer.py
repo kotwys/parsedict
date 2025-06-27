@@ -5,10 +5,10 @@ from docx.text.paragraph import Paragraph
 
 @dataclass(slots=True, frozen=True)
 class Format:
-    font: str | None
-    bold: bool
-    italic: bool
-    sup: bool
+    font: str | None = None
+    bold: bool = False
+    italic: bool = False
+    sup: bool = False
 
 
 class Character(NamedTuple):

@@ -1,0 +1,4 @@
+hissp==0.5.0
+parsy==2.1
+python-docx==1.2.0
+regex==2024.11.6

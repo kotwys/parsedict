@@ -2,6 +2,6 @@
 
 let
   python = pkgs.python3.withPackages (ps: builtins.attrValues {
-    inherit (ps) python-docx parsy regex python-lsp-server;
+    inherit (ps) python-lsp-server virtualenv;
   });
 in python.env
