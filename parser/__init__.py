@@ -8,7 +8,6 @@ import hissp.compiler
 import hissp.reader
 from parsy import alt, eof, fail, forward_declaration, seq, success
 
-from model import Example, Sense, Entry
 from parser.helpers import *
 
 

@@ -8,6 +8,7 @@ import regex
 
 from lexer import Character, Format
 from logger import log
+from parser.markup import Markup
 
 
 def regex_opt(strings: Sequence[str]) -> str:
@@ -153,13 +154,8 @@ def plain_text(chars: list[Character], **kwargs) -> str:
         chars))
 
 
-def formatted_text(chars: list[Character], **kwargs) -> list:
+def formatted_text(chars: list[Character], **kwargs) -> Markup:
     """Transform a list of characters to a list of HTML-like markup nodes.
-
-    Each node is either a plain string, or a tuple of form `(tag, child1,
-    child2, ...)`, where `tag` is a string denoting the type of the node
-    (italic, superscript, etc.) and the following elements are child nodes of
-    the current node.
 
     In the `markup` kwarg, a tuple of `Format` attribute names should be passed
     (eg. ``("italic", "sup")``).  Only these attributes are accounted when
@@ -223,7 +219,7 @@ def formatted_text(chars: list[Character], **kwargs) -> list:
     if j > i:
         collapse_stack(1)
 
-    return stack[0]
+    return Markup(stack[0])
 
 
 def collect(**kwargs):
@@ -358,3 +354,16 @@ def match_char(char: str) -> Parser:
 def flatten[T](cols: list[list[T]]) -> list[T]:
     """Flattens a list of lists."""
     return reduce(iconcat, cols, [])
+
+def split_on(chars: list[Character], sep: str) -> list[list[Character]]:
+    """Splits the character sequence on the given separator character."""
+    result = []
+    start = 0
+    for i, char in enumerate(chars):
+        if char.char == sep:
+            if i > start:
+                result.append(chars[start:i])
+            start = i+1
+    if start != len(chars):
+        result.append(chars[start:])
+    return result

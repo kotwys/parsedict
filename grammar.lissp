@@ -218,7 +218,8 @@ hissp..prelude#:
   (-> (seq (.optional (chars "\\*"))
            (repeat1
             (-> (.should_fail labels-text "помета")
-                (.then (alt (chars "[^○\\*<]" : italic True)
+                (.then (alt (chars "\\[[^\\]]+\\]" : italic True)
+                            (chars "[^○\\*<]" : italic True)
                             ;; ellipsis
                             (chars "(,\\s*)?<(…|\\.{3})>")
                             ;; phonetic variation
@@ -358,7 +359,12 @@ hissp..prelude#:
              (-> generic-sep (.then end-reference-start))))
     (-> (match_char "●")
         (.then (-> any_char (.until valid-ender)))
-        (.map (collect : markup '(italic) strip True)))))
+        (.map (lambda (chars) (split_on chars "\n")))
+        (.map (lambda (pars)
+                (list (map (collect :
+                                    markup '(italic)
+                                    strip True)
+                           pars)))))))
 
 (defun end-reference (marker)
   (let (pat (.format "{}\\s*" (regex..escape marker)))
@@ -456,7 +462,8 @@ hissp..prelude#:
                 (.map flatten))
 
             commentary
-            (.many commentary)
+            (-> (.many commentary)
+                (.map flatten))
 
             doublets
             (-> generic-sep
