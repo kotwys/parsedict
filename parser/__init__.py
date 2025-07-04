@@ -4,6 +4,9 @@ The user should first call the `init_grammar` function that reads the
 definitions from a Lissp file.  Then, the defined rules are accesible as
 attributes of this module.
 """
+from pathlib import Path
+import sys
+
 import hissp.compiler
 import hissp.reader
 from parsy import alt, eof, fail, forward_declaration, seq, success
@@ -11,10 +14,12 @@ from parsy import alt, eof, fail, forward_declaration, seq, success
 from parser.helpers import *
 
 
+grammar_file = Path(sys.argv[0]).parent / 'grammar.lissp'
+
 def init_grammar():
     """Read the grammar from a Lissp file.
 
     Refer to the `grammar.lissp` file for details."""
-    with open('grammar.lissp') as f:
+    with open(grammar_file) as f:
         lissp = hissp.reader.Lissp(filename=f.name)
         hissp.compiler.execute(*(lissp.reads(f.read())))
