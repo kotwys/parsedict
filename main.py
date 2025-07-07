@@ -73,6 +73,7 @@ def worker_fn(entry: list[Character]):
 BUFFER_SIZE = 100
 
 def execute_multi_process(jobs, entries, output_fn, *args):
+    """Analyses the entries in the specified number of concurrent processes."""
     counter = 0
     buffer = []
     def dump_buffer():
@@ -96,6 +97,7 @@ def execute_multi_process(jobs, entries, output_fn, *args):
 
 
 def execute_single_process(entries, output_fn, *args):
+    """Analyses the entries in a single process."""
     worker_init(*args)
     for entry in entries:
         result = worker_fn(entry)

@@ -34,7 +34,7 @@ def prepare_for_output(obj):
     """Prepares the parser result for output.
 
     Keys that begin with an underscore and keys with falsy values are
-    removed.  Keys are sorted for users' convenience.
+    removed.  Keys are sorted for the user's convenience.
     """
     if isinstance(obj, dict):
         pairs = [

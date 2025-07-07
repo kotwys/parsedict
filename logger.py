@@ -1,3 +1,4 @@
+"""Basic logging facilities."""
 import logging
 from logging.handlers import QueueHandler, QueueListener
 import sys
@@ -8,6 +9,9 @@ log = logging.getLogger()
 entry_prefix = ''
 
 class EntryFilter(logging.Filter):
+    """A logging filter that supplies the information about the current entry
+    being processed."""
+
     def filter(self, record):
         record.prefix = entry_prefix
         return True

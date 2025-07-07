@@ -80,7 +80,7 @@ hissp..prelude#:
     |см.|))
 
 (define headword-pattern
-  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0275\u0301\u0308\\s\\.\\?etyopahkxcbm]+"
+  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0275\u0301\u0308\\s\\.\\?etyopahkxcbmá]+"
                   : flags regex..IGNORECASE))
 
 ;;;; Парсеры
@@ -149,6 +149,8 @@ hissp..prelude#:
 (define headword-ref
   (-> (seq headword
            (seq :
+                _space (.optional space)
+
                 sense_number
                 (-> (chars "\\d+" : bold True)
                     (.desc "номер значения в ссылке")
@@ -226,6 +228,7 @@ hissp..prelude#:
                             (chars "~\\s*")
                             ;; doubt
                             (chars "\\?\\s*")
+                            (chars "…")
                             (chars "\\."))))))
       (.desc "текст примера")
       (.map concat-truthy)
@@ -319,15 +322,12 @@ hissp..prelude#:
 
 (define sense-lexical
   (seq :
+       derivation  (.optional reference)
        translation translation-text
        type        (success 'lexical)
        examples    (-> (.optional generic-sep)
                        (.then examples-section)
                        (.optional))))
-
-(define sense-reference
-  (-> reference
-      (.map (lambda (r) (% 'type 'ref :** r)))))
 
 (define phrase (forward_declaration))
 
@@ -350,7 +350,7 @@ hissp..prelude#:
        type   (success 'phrase)))
 
 (define sense
-  (alt sense-reference sense-lexical))
+  (alt sense-lexical))
 
 (define commentary
   (let (valid-ender
@@ -362,7 +362,7 @@ hissp..prelude#:
         (.map (lambda (chars) (split_on chars "\n")))
         (.map (lambda (pars)
                 (list (map (collect :
-                                    markup '(italic)
+                                    markup '(bold italic)
                                     strip True)
                            pars)))))))
 

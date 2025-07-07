@@ -1,3 +1,4 @@
+"""Helper functions that form the grammar for parsing."""
 from functools import reduce
 from operator import iconcat
 from typing import Callable, Mapping, Sequence
@@ -48,6 +49,7 @@ SCRIPT_CONV: Mapping[str, Mapping[str, str]] = {
         '\u04e9': '\u0275',  # ɵ
     },
     'Cyrl': {
+        '\u00e1': 'а́',
         '\u0275': '\u04e9',  # ө
         '\u0063': '\u0441',
     },
@@ -95,7 +97,7 @@ def normalize_char(c: Character, **kwargs) -> str:
     else:
         # Check for Unicode consistency just in case
         if 'script' in kwargs:
-            name = unicodedata.name(c.char)
+            name = unicodedata.name(c.char, '')
             no = ['LATIN', 'CYRILLIC']
             match kwargs['script']:
                 case 'Latn': no.remove('LATIN')
@@ -115,7 +117,7 @@ def detect_script(chars: list[Character]) -> str:
         if c.format.font in FONT_CONV or c.char in ignore:
             continue
         total += 1
-        name = unicodedata.name(c.char)
+        name = unicodedata.name(c.char, '')
         if 'LATIN' in name:
             latin += 1
         elif 'CYRILLIC' in name:
