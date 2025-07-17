@@ -105,6 +105,13 @@ def execute_single_process(entries, output_fn, *args):
             output_fn(result)
 
 
+def try_parse_int(val: str) -> tuple[int, None] | tuple[None, Exception]:
+    try:
+        return int(val), None
+    except ValueError as ex:
+        return None, ex
+
+
 def main(args: argparse.Namespace):
     if args.partial:
         if args.format != 'raw':
@@ -116,12 +123,24 @@ def main(args: argparse.Namespace):
 
     doc = Document(args.infile)
     if args.par is not None:
-        if args.par < 0 or args.par >= len(doc.paragraphs):
-            print('Paragraph number is out of range (max: %s)'
-                  % len(doc.paragraphs)-1,
-                  file=sys.stderr)
-            sys.exit(-1)
-        chars = list(extract_characters(doc.paragraphs[args.par]))
+        idx, err = try_parse_int(args.par)
+        if not err:
+            # If integer, just find the paragraph by its index
+            if idx < 0 or idx >= len(doc.paragraphs):
+                print('Paragraph index is out of range (max: %s)'
+                      % len(doc.paragraphs)-1,
+                      file=sys.stderr)
+                sys.exit(-1)
+            par = doc.paragraphs[idx]
+        else:
+            # If string, find the paragraph that begins with that string
+            try:
+                par = next(p for p in doc.paragraphs
+                           if p.text.startswith(args.par))
+            except StopIteration:
+                print('Paragraph not found', file=sys.stderr)
+                sys.exit(-1)
+        chars = list(extract_characters(par))
         entries = [chars]
     else:
         entries = extract_entries(doc)
@@ -152,8 +171,9 @@ if __name__ == "__main__":
         help='the .docx file')
     p.add_argument(
         '--par',
-        type=int,
-        help='parse the given paragraph (0-indexed) instead of the full file')
+        help='''parse the given paragraph instead of the full file.
+        If PAR is an integer, finds the paragraph with the index PAR.
+        Otherwise, finds the first paragraph that begins with PAR.''')
     p.add_argument(
         '--format',
         help='the output format (default is YAML)',
