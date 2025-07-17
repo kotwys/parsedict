@@ -11,6 +11,7 @@ FIELD_ORDER = {
     'headword': 0,
     'derivation': 1,
     'label': 2,
+    'prolog': 2,
     'senses': 3,
 
     # sense

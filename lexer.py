@@ -23,6 +23,8 @@ class Format:
     """Whether the character is italic."""
     sup: bool = False
     """Whether the character is a superscript."""
+    sub: bool = False
+    """Whether the character is a subscript."""
 
 
 class Character(NamedTuple):
@@ -46,6 +48,7 @@ def extract_characters(par: Paragraph) -> Iterator[Character]:
             bold=bool(run.bold),
             italic=bool(run.italic),
             sup=bool(run.font.superscript),
+            sub=bool(run.font.subscript),
         )
         for c in run.text:
             yield Character(c, format)

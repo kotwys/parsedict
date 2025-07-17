@@ -13,6 +13,7 @@ HTML_TAG_NAME: Mapping[str, str] = {
     'italic': 'em',
     'bold': 'strong',
     'sup': 'sup',
+    'sub': 'sub',
 }
 
 

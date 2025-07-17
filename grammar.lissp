@@ -23,10 +23,9 @@ hissp..prelude#:
 ;; символа-разделителя (например, точки с запятой), который будет
 ;; поглощён вместе с остальным текстом.
 (defun delimited-sequence (start end)
-  (-> (.times (match_char start) 1)
-      (operator..add (chars (.format "[^\\{}]+" end)))
-      (operator..add
-       (.times (match_char end) 1))))
+  (operator..add
+   (.times (match_char start) 1)
+   (.until any_char (match_char end) : consume_other True)))
 
 (defun repeat1 (p)
   (-> p (.at_least 1) (.map flatten)))
@@ -61,7 +60,7 @@ hissp..prelude#:
     |вопрос.| |вопросит.| |вр.| |врем.| |вспом. гл.| |вход. п.|
     |выд.-огран.| |выс.| |гл.| |глаг.| |дат. п.| |деепр.| |действ.|
     |дет.| |детск.| |диал.| |долж.| |дроб.| |ед. ч.| |ж.| |ж.-д.| |заг.|
-    |знач.| |изобр.| |изобразит.| |изъясн.| |инф.| |ирон.| |колич.|
+    |знач.| |зоол.| |изобр.| |изобразит.| |изъясн.| |инф.| |ирон.| |колич.|
     |крат.| |кул.| |л.| |-л.| |ласк.| |ласкат.| |лит.| |личн.-притяж.|
     |м.| |мат.| |мед.| |межд.| |мест.| |миф.| |мифолог.| |мн. ч.|
     |многокр.| |мод.| |мол.| |нареч.| |наст.| |неопр.| |неочев.|
@@ -80,7 +79,8 @@ hissp..prelude#:
     |см.|))
 
 (define headword-pattern
-  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0275\u0301\u0308\\s\\.\\?etyopahkxcbmá]+"
+  ;;                                                  <====ЛАТИНИЦА====>
+  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0301\u0308\\s\\.\\?etyopahkxcbmáéóɵÿ]+"
                   : flags regex..IGNORECASE))
 
 ;;;; Парсеры
@@ -127,7 +127,7 @@ hissp..prelude#:
                       (chars "\\."))
                  (.at_least 1)
                  (.map flatten)
-                 (.map (collect : markup '(sup)))))
+                 (.map (collect : markup '(sup bold)))))
       (.skip (match_char ")"))
       (.desc "произношение")))
 
@@ -151,8 +151,15 @@ hissp..prelude#:
            (seq :
                 _space (.optional space)
 
+                variant
+                (-> (chars "~\\s*")
+                    (.then headword)
+                    (.map (lambda (h) (operator..getitem h 'value)))
+                    (.desc "фонетический вариант")
+                    (.optional))
+
                 sense_number
-                (-> (chars "\\d+" : bold True)
+                (-> (chars "\\d+(–\\d+)?" : bold True)
                     (.desc "номер значения в ссылке")
                     (.map (collect))
                     (.optional))
@@ -171,7 +178,7 @@ hissp..prelude#:
        base   (-> headword
                   (.sep_by (chars ",\\s*|\\s*и\\s+") :
                            min 1))
-       _sep   (.optional (chars ";\\s*"))))
+       _sep   (.optional (chars ";\\s*" : bold True))))
 
 (define sense-number
   (-> (chars "\\d+[\\.\\)]" : bold True)
@@ -233,7 +240,7 @@ hissp..prelude#:
       (.desc "текст примера")
       (.map concat-truthy)
       (.map (collect :
-                     markup '(bold sup)
+                     markup '(bold sup sub)
                      strip  True
                      script 'detect))))
 
@@ -261,7 +268,7 @@ hissp..prelude#:
                      valid-example-ender))
         (operator..add (alt ender (success (list))))
         (.map (collect :
-                       markup '(italic sup)
+                       markup '(italic sup sub)
                        strip  ", ")))))
 
 ;; [210]
@@ -311,7 +318,9 @@ hissp..prelude#:
          ;; file cabinet examples
          (-> (match_char "○")
              (.then (.optional space))
-             (.then (.sep_by example-filecabinet separator : min 1))
+             (.then (.sep_by example-filecabinet
+                             (alt separator (chars "\\s*○\\s+"))
+                             : min 1))
              (.optional)))
         (.map concat-truthy)
         (.bind (lambda (v)
@@ -322,7 +331,7 @@ hissp..prelude#:
 
 (define sense-lexical
   (seq :
-       derivation  (.optional reference)
+       derivation  (.sep_by reference (chars " ?– "))
        translation translation-text
        type        (success 'lexical)
        examples    (-> (.optional generic-sep)
@@ -337,7 +346,7 @@ hissp..prelude#:
        (-> (seq (-> (chars : italic True) ; пометы
                     (.desc "пометы перед фразой")
                     (.optional (list)))
-                (-> (chars "[^:]+" : bold True) ; синонимы
+                (-> (chars "\\([^\\)]*\\)" : bold True) ; синонимы
                     (.desc "синонимы перед фразой")
                     (.optional (list))))
            (.map flatten)
@@ -362,7 +371,7 @@ hissp..prelude#:
         (.map (lambda (chars) (split_on chars "\n")))
         (.map (lambda (pars)
                 (list (map (collect :
-                                    markup '(bold italic)
+                                    markup '(bold italic sup sub)
                                     strip True)
                            pars)))))))
 
@@ -386,10 +395,17 @@ hissp..prelude#:
 
 (define entry-multiple-senses
   (seq :
-       label
-       (-> (chars : italic True)
-           (.map (collect : strip True))
+       prolog
+       (-> (alt (delimited-sequence "(" ")")
+                (chars : italic True))
+           (.at_least 1)
+           (.map flatten)
+           (.map (collect :
+                          strip True
+                          markup '(italic bold)))
            (.optional))
+
+       _space (.optional space)
 
        senses
        (-> (alt (.then sense-number (alt sense-phrase sense))
@@ -420,9 +436,11 @@ hissp..prelude#:
 
 (define entry-phraseological
   (seq :
-       label
+       prolog
        (-> (chars : italic True bold False)
-           (.map (collect : strip True))
+           (.map (collect :
+                          strip True
+                          markup '(italic)))
            (.optional))
 
        _colon  (chars ":\\s*" : bold True)
@@ -444,7 +462,7 @@ hissp..prelude#:
             _space (.optional space)
 
             derivation
-            (.optional reference))
+            (.at_most reference 1))
        (alt (-> (ahead? (alt eof
                              (match_char "♦")
                              (match_char "●")))
@@ -475,5 +493,7 @@ hissp..prelude#:
                 (.then (end-reference "ср."))
                 (.optional))
 
-            _period (.optional (match_char "."))))
+            _period (.optional (match_char "."))
+
+            _trailing_space (.optional space)))
       (.map (lambda (ds) (reduce operator..or_ ds)))))
