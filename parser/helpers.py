@@ -151,14 +151,23 @@ def strip_characters(
     return chars
 
 
-def plain_text(chars: list[Character], **kwargs) -> str:
+def plain_text(chars: list[Character], normalize=True, **kwargs) -> str:
     """Collect a list of characters into a plain text string.
 
     This function effectively strips any formatting.
+
+    If `normalize` is `True` (the default), then output is also
+    normalized according to the Unicode's canonical composition.  Be
+    aware that normalization may change the length of the string, even
+    if visually it remains the same.
     """
-    return ''.join(map(
+    text = ''.join(map(
         lambda c: normalize_char(c, **kwargs),
         chars))
+    if normalize:
+        return unicodedata.normalize('NFC', text)
+    else:
+        return text
 
 
 def formatted_text(chars: list[Character], **kwargs) -> Markup:
@@ -180,14 +189,14 @@ def formatted_text(chars: list[Character], **kwargs) -> Markup:
         nonlocal i, j, stack
         if j == i:
             return
-        text = plain_text(chars[i:j], **kwargs)
+        text = plain_text(chars[i:j], normalize=False, **kwargs)
         # Exclude trailing spaces from formatted nodes
         if going_down and len(stripped := text.rstrip()) != len(text):
             text = stripped
             i += len(stripped)
         else:
             i = j
-        stack[-1].append(text)
+        stack[-1].append(unicodedata.normalize('NFC', text))
 
     def collapse_stack(lowest: int):
         nonlocal stack

@@ -10,8 +10,8 @@ type MarkupNode = str | tuple[str, *tuple[MarkupNode, ...]]
 
 
 HTML_TAG_NAME: Mapping[str, str] = {
-    'italic': 'em',
-    'bold': 'strong',
+    'italic': 'i',
+    'bold': 'b',
     'sup': 'sup',
     'sub': 'sub',
 }
@@ -45,3 +45,6 @@ class Markup:
     def to_html(self) -> str:
         """Transform the markup into a HTML string."""
         return ''.join(markup_to_html(n) for n in self.content)
+
+    def __bool__(self) -> bool:
+        return bool(self.content)
