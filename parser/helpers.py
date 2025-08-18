@@ -192,8 +192,9 @@ def formatted_text(chars: list[Character], **kwargs) -> Markup:
         text = plain_text(chars[i:j], normalize=False, **kwargs)
         # Exclude trailing spaces from formatted nodes
         if going_down and len(stripped := text.rstrip()) != len(text):
+            strip_width = len(text) - len(stripped)
+            i = j - strip_width
             text = stripped
-            i += len(stripped)
         else:
             i = j
         stack[-1].append(unicodedata.normalize('NFC', text))
