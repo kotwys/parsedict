@@ -80,7 +80,7 @@ hissp..prelude#:
 
 (define headword-pattern
   ;;                                                  <====ЛАТИНИЦА====>
-  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0301\u0308\\s\\.\\?etyopahkxcbmáéóɵÿ]+"
+  (regex..compile "[-а-яёӵӧӝӥӟўӱө\u0301\u0308\\s\\.…\\?etyopahkxcbmáéóɵÿ]+"
                   : flags regex..IGNORECASE))
 
 ;;;; Парсеры
