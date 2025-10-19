@@ -16,7 +16,7 @@ class Format:
     """Represents the formatting style of a character."""
 
     font: str | None = None
-    """The font name of the character (`None` if not specified.)."""
+    """The font name of the character (`None` if not specified)."""
     bold: bool = False
     """Whether the character is bold."""
     italic: bool = False
@@ -25,6 +25,8 @@ class Format:
     """Whether the character is a superscript."""
     sub: bool = False
     """Whether the character is a subscript."""
+    color: tuple[int, int, int] | None = None
+    """Color of the character (`None` if not specified)."""
 
 
 class Character(NamedTuple):
@@ -43,12 +45,17 @@ def extract_characters(par: Paragraph) -> Iterator[Character]:
         if not run.text:
             continue
 
+        color = None
+        if c := run.font.color.rgb:
+            color = (c[0], c[1], c[2])
+
         format = Format(
             font=run.font.name,
             bold=bool(run.bold),
             italic=bool(run.italic),
             sup=bool(run.font.superscript),
             sub=bool(run.font.subscript),
+            color=color,
         )
         for c in run.text:
             yield Character(c, format)

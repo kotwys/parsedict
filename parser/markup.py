@@ -14,6 +14,7 @@ HTML_TAG_NAME: Mapping[str, str] = {
     'bold': 'b',
     'sup': 'sup',
     'sub': 'sub',
+    'color': 'color',
 }
 
 

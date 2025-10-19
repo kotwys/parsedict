@@ -314,6 +314,14 @@ def format_pred(**kwargs) -> Callable[[Character], bool]:
         else:
             preds.append(lambda c: not c.format.italic)
 
+    if 'color' in kwargs:
+        if isinstance(kwargs['color'], tuple):
+            preds.append(lambda c: c.format.color == kwargs['color'])
+        elif kwargs['color']:
+            preds.append(lambda c: c.format.color)
+        else:
+            preds.append(lambda c: not c.format.color)
+
     return lambda c: c.char.isspace() or all(f(c) for f in preds)
 
 
