@@ -6,15 +6,31 @@ from typing import Mapping
 from lexer import Character, Format
 
 
-type MarkupNode = str | tuple[str, *tuple[MarkupNode, ...]]
+type MarkupNode = str | tuple[str, dict, *tuple[MarkupNode, ...]]
 
 
-HTML_TAG_NAME: Mapping[str, str] = {
-    'italic': 'i',
-    'bold': 'b',
-    'sup': 'sup',
-    'sub': 'sub',
-    'color': 'color',
+TAGS: Mapping[str, dict] = {
+    'italic': {
+        'tag': 'i',
+    },
+    'bold': {
+        'tag': 'b',
+    },
+    'sup': {
+        'tag': 'sup',
+    },
+    'sub': {
+        'tag': 'sub',
+    },
+    'color': {
+        'tag': 'font',
+        'attrs': {
+            'color': {
+                'name': 'color',
+                'transform': lambda c: f'#{c[0]:02x}{c[1]:02x}{c[2]:02x}',
+            },
+        },
+    },
 }
 
 
@@ -22,11 +38,20 @@ def markup_to_html(node: MarkupNode) -> str:
     if isinstance(node, str):
         return html.escape(node)
     elif isinstance(node, tuple):
-        tag, *children = node
-        html_tag = HTML_TAG_NAME[tag]
+        tag_name, attrs, *children = node
+        tag = TAGS[tag_name]
+        html_tag = tag['tag']
+        html_attrs = ''
+        if 'attrs' in tag:
+            for attr, spec in tag['attrs'].items():
+                value = attrs[attr]
+                if 'transform' in spec:
+                    value = spec['transform'](value)
+                escaped = html.escape(value, quote=True)
+                html_attrs += f' {spec['name']}="{escaped}"'
         inner_html = ''.join(markup_to_html(child)
                              for child in children)
-        return f'<{html_tag}>{inner_html}</{html_tag}>'
+        return f'<{html_tag}{html_attrs}>{inner_html}</{html_tag}>'
     else:
         raise TypeError('Node should be either a str or a tuple')
 

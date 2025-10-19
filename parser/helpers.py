@@ -9,7 +9,7 @@ import regex
 
 from lexer import Character, Format
 from logger import log
-from parser.markup import Markup
+from parser.markup import Markup, MarkupNode
 
 
 def regex_opt(strings: Sequence[str]) -> str:
@@ -170,6 +170,14 @@ def plain_text(chars: list[Character], normalize=True, **kwargs) -> str:
         return text
 
 
+def node_matches_format(node: MarkupNode, format: Format) -> bool:
+    if not getattr(format, node[0]):
+        return False
+    elif node[0] == 'color':
+        return node[1]['color'] == format.color
+    return True
+
+
 def formatted_text(chars: list[Character], **kwargs) -> Markup:
     """Transform a list of characters to a list of HTML-like markup nodes.
 
@@ -215,8 +223,7 @@ def formatted_text(chars: list[Character], **kwargs) -> Markup:
             if not format or new_format != format:
                 lowest_collapse = None
                 for l in range(len(stack)-1, 0, -1):
-                    at = stack[l][0]
-                    if not getattr(char.format, at):
+                    if not node_matches_format(stack[l], char.format):
                         lowest_collapse = l
 
                 if lowest_collapse:
@@ -228,7 +235,10 @@ def formatted_text(chars: list[Character], **kwargs) -> Markup:
                     if any(level[0] == at for level in stack[1:]):
                         continue
                     push_node(False)
-                    stack.append([at])
+                    data = {}
+                    if at == 'color':
+                        data['color'] = char.format.color
+                    stack.append([at, data])
 
                 format = new_format
         j += 1
