@@ -1,0 +1,133 @@
+;;;; Описание грамматики словаря  -*- mode: scheme -*-
+
+;;; В этом файле описана «грамматика» для разбора структуры словарной статьи
+;;; Школьного удмуртско-русского и русско-удмуртского словаря (Бусыгина Л. В.)
+
+;;; Исходный файл был предобработан и содержит цветовую кодировку некоторых
+;;; структурных элементов.
+
+hissp..prelude#:
+
+(define space (.desc (chars "\\s*") "пробел"))
+
+(define headword-color '(0x2a 0x60 0x99))
+(define label-color    '(0xff 0x40 0x00))
+
+(define headword-text
+  (-> (chars "[^\\d,IVXL:\\[\\]]*" : color headword-color)
+      (.map (collect : strip True))
+      (.desc "заглавное слово")))
+
+(define headword
+  (seq :
+       value
+       headword-text
+
+       alteration
+       (-> (chars "\\[" : color headword-color)
+           (.then (chars "[^\\]]+" : color headword-color))
+           (.skip (chars "\\]" : color headword-color))
+           (.map (collect))
+           (.optional))
+
+       homonym_id
+       (-> (chars "[IVXL]+" : color headword-color)
+           (.desc "римские цифры")
+           (.map (collect))
+           (.optional))))
+
+(define sense-number
+  (-> (chars "\\d+[\\.\\)]" : color headword-color)
+      (.desc "номер значения")))
+
+(define section-end
+  (alt sense-number
+       (match_char "◊")
+       eof))
+
+(define example-start
+  (-> (chars ";\\s*")
+      (.then (chars "." : color headword-color))))
+
+(define translation-text
+  (-> any_char
+      (.until (alt section-end example-start))
+      (.map (collect :
+                     markup '(color bold italic)))))
+
+(define generic-separator (chars ";\\s*"))
+
+(define example
+  (seq :
+       text
+       (-> (chars : color headword-color)
+           (.map (collect : strip True)))
+
+       translation translation-text))
+
+(define examples-section
+  (-> generic-separator
+      (.then (.should_fail sense-number "ожидалось начало примера"))
+      (.then (.sep_by example generic-separator : min 1))
+      (.optional)))
+
+(define sense
+  (seq :
+       translation translation-text
+       examples    examples-section
+       _semicolon  (.optional generic-separator)))
+
+(define entry-single-sense
+  (seq : senses (operator..mul sense 1)))
+
+(define entry-multiple-senses
+  (seq :
+       prolog
+       (-> (chars : color label-color)
+           (.map (collect : markup '(color italic)))
+           (.optional))
+
+       senses
+       (-> sense-number
+           (.then (.optional space))
+           (.then sense)
+           (.at_least 1))))
+
+(define phrase
+  (-> (seq (-> headword
+               (.sep_by (chars ",\\s+") : min 1))
+           (alt entry-multiple-senses
+                entry-single-sense))
+      (.combine (lambda (a b) (% 'headword a :** b)))))
+
+(define entry-phraseological
+  (seq :
+       _colon (chars ":\\s*" : color headword-color)
+
+       senses
+       (-> phrase
+           (.map (lambda (phrase)
+                   (% 'type   'phrase
+                      'phrase phrase)))
+           (.times 1))))
+
+(define entry
+  (-> (seq
+       (seq :
+            headword
+            (-> headword
+                (.sep_by (chars ",\\s+") : min 1))
+
+            _space (.optional space))
+       (alt entry-phraseological
+            entry-multiple-senses
+            entry-single-sense)
+       (seq :
+            phrases
+            (-> (match_char "◊")
+                (.then (.optional space))
+                (.then (.sep_by example generic-separator : min 1))
+                (.optional))
+
+            _trailing_space (.optional space)))
+      (.map (lambda (ds) (reduce operator..or_ ds)))))
