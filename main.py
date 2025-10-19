@@ -46,12 +46,13 @@ def output_yaml(result: dict):
 parse_fn = None
 
 def worker_init(
+        grammar: str,
         partial_parse: bool,
         log_queue,
         log_level):
     global parse_fn
     import logger
-    parser.init_grammar()
+    parser.init_grammar(grammar)
     logger.init_logging(log_queue, log_level)
 
     if partial_parse:
@@ -153,11 +154,11 @@ def main(args: argparse.Namespace):
         execute_multi_process(
             args.jobs,
             entries, output_fn,
-            args.partial, log_queue, log_level)
+            args.grammar, args.partial, log_queue, log_level)
     else:
         execute_single_process(
             entries, output_fn,
-            args.partial, log_queue, log_level)
+            args.grammar, args.partial, log_queue, log_level)
 
     listener.stop()
 
@@ -165,6 +166,9 @@ def main(args: argparse.Namespace):
 if __name__ == "__main__":
     p = argparse.ArgumentParser(
         description='Parse formatted text from a .docx file')
+    p.add_argument(
+        'grammar',
+        help='the name of the grammar to use')
     p.add_argument(
         'infile',
         type=argparse.FileType('rb'),
