@@ -184,6 +184,32 @@
 
     Блок иллюстративного материала.
 
+### DetachedExamples
+
+Блок примеров, относящийся к нескольким значениям.
+
+#### Поля
+
+- **type**: "examples"
+
+- **examples**: sequence&lt;Example&gt; (*min*=1)
+
+### Phrase
+
+Устойчивое выражение или сочетание («подстатья»).
+
+#### Поля
+
+- **headword**: sequence&lt;HeadwordAndPronunciation&gt;
+
+- **prolog**: HTMLLike?
+
+    Вступительный текст перед списком значений (например, словарные пометы).
+
+- **senses**: sequence&lt;SenseLexical | DetachedExamples&gt; (*min*=1)
+
+    Значения словарной единицы.
+
 ### SensePhrase
 
 Значение, описываемое через устойчивое выражение (сочетание) с другим словом.
@@ -201,89 +227,30 @@
 
     Описание устойчивого выражения.
 
-### DetachedExamples
-
-Блок примеров, относящийся к нескольким значениям.
-
-#### Поля
-
-- **type**: "examples"
-
-- **examples**: sequence&lt;Example&gt; (*min*=1)
-
-### EntrySingleSense
-
-Статья только с одним значением заглавного слова.
-
-#### Поля
-
-- **senses**: sequence&lt;SenseLexical&gt; (*min*=1, *max*=1)
-
-### EntryMultipleSenses
-
-Статья с несколькими значениями заглавного слова.  Значения в словаре имеют
-порядковый номер, записанный арабскими цифрами.
-
-#### Поля
-
-- **prolog**: HTMLLike?
-
-    Вступительный текст перед списком значений (например, словарные пометы).
-
-- **senses**: sequence&lt;SensePhrase | SenseLexical | DetachedExamples&gt; (*min*=1)
-
-### EntryExamplesOnly
-
-Словарная статья, включающая только примеры.
-
-#### Поля
-
-- **senses**
-
-    Включает всегда один элемент-словарь со следующими полями:
-    - **type**: "examples"
-    - **examples**: sequence&lt;Example&gt; (*min*=1)
-
-### Phrase
-
-Устойчивое выражение или сочетание.
-
-**Расширяет** [EntryExamplesOnly](#EntryExamplesOnly) | [EntryMultipleSenses](#EntryMultipleSenses) | [EntrySingleSense](#EntrySingleSense).
-
-#### Поля
-
-- **headword**: sequence&lt;HeadwordAndPronunciation&gt;
-
-### EntryPhraseological
-
-Словарная статья, описывающее слово с помощью устойчивых выражений (обычно
-наречно-изобразительные слова).
-
-#### Поля
-
-- **prolog**: HTMLLike?
-
-    Вступительный текст перед списком значений (например, словарные пометы).
-
-- **senses**: sequence&lt;SensePhrase&gt; (*min*=1)
-
 ### Entry
 
 Корень словарной статьи.
-
-**Расширяет** {} | [EntryPhraseological](#EntryPhraseological) | [EntryMultipleSenses](#EntryMultipleSenses) | [EntrySingleSense](#EntrySingleSense).
 
 #### Поля
 
 - **headword**: sequence&lt;HeadwordAndPronunciation&gt; (*min*=1)
 
-- **derivation**: Reference?
+- **derivation**: sequence&lt;Reference&gt;
 
     Информация о производящей основе.
 
+- **prolog**: HTMLLike?
+
+    Вступительный текст перед списком значений (например, словарные пометы).
+
+- **senses**: sequence&lt;SensePhrase | SenseLexical | DetachedExamples&gt;
+
+    Значения словарной единицы.  Если статья имеет несколько значений, то они
+    нумеруются арабскими цифрами.  Статья может не содержать ни одного значения.
+
 - **phrases**: sequence&lt;Phrase&gt;
 
-    Устойчивые выражения.
+    Устойчивые выражения и сочетания.
 
 - **commentary**: sequence&lt;HTMLLike&gt;
 
