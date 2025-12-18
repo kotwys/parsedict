@@ -6,8 +6,8 @@
 
 Отдельная словарная статья представлена типом [Entry](#Entry).  В зависимости от
 способа оформления статьи в словаре, может использоваться разный набор полей.
-Поля, значениями которых выступают пустые последовательности, опускаются в
-итоговом документе.
+Поля, значениями которых выступают ложные значения (`false`, пустые
+последовательности), опускаются в итоговом документе.
 
 ## Условные обозначения
 
@@ -38,11 +38,15 @@
 <tr>
 <td>sequence&lt;T&gt;</td>
 <td>список (массив) из значений типа T. Количество элементов может быть
-ограничено (*min*, *max*)</td>
+ограничено (<em>min</em>, <em>max</em>)</td>
 </tr>
 <tr>
 <td>строка в кавычках</td>
 <td>буквальный тип, представленный одним данным значением</td>
+</tr>
+<tr>
+<td>{}</td>
+<td>пустой словарь</td>
 </tr>
 </tbody>
 </table>
@@ -84,7 +88,7 @@
 
 Заглавное слово с произношением (например: **гондөр** (*gə̑ndə̑r*)).
 
-**Расширяет** [Headword](##Headword).
+**Расширяет** [Headword](#Headword).
 
 #### Поля
 
@@ -102,7 +106,7 @@
 Ссылка на словарную статью (с возможным указанием на отдельное значение или
 устойчивое выражение).
 
-**Расширяет** [Headword](##Headword).
+**Расширяет** [Headword](#Headword).
 
 #### Поля
 
@@ -244,7 +248,7 @@
 
 Устойчивое выражение или сочетание.
 
-**Расширяет** [EntryExamplesOnly](##EntryExamplesOnly) | [EntryMultipleSenses](##EntryMultipleSenses) | [EntrySingleSense](##EntrySingleSense).
+**Расширяет** [EntryExamplesOnly](#EntryExamplesOnly) | [EntryMultipleSenses](#EntryMultipleSenses) | [EntrySingleSense](#EntrySingleSense).
 
 #### Поля
 
@@ -267,7 +271,7 @@
 
 Корень словарной статьи.
 
-**Расширяет** {} | [EntryPhraseological](##EntryPhraseological) | [EntryMultipleSenses](##EntryMultipleSenses) | [EntrySingleSense](##EntrySingleSense).
+**Расширяет** {} | [EntryPhraseological](#EntryPhraseological) | [EntryMultipleSenses](#EntryMultipleSenses) | [EntrySingleSense](#EntrySingleSense).
 
 #### Поля
 
